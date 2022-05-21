@@ -6,22 +6,35 @@ using UnityEngine.UI;
 
 public class MainManager : MonoBehaviour
 {
+    [Header("Interface")]
+    public Text ScoreText;
+    public Text HighScore;
+    public Text CongratsText;
+    public Text GameOverStateText;
+    public GameObject GameOverWindow;
+    public GameObject TutorialWindow;
+    public Toggle tutorialToggle;
+
     public Brick BrickPrefab;
     public int LineCount = 6;
     public Rigidbody Ball;
 
-    public Text ScoreText;
-    public GameObject GameOverText;
+    List<GameObject> brickList;
     
     private bool m_Started = false;
     private int m_Points;
-    
+    private bool isTutorialClosed = false;
     private bool m_GameOver = false;
+    private int shouldShowTutorial = 1;
+    private bool m_GameCleared = false;
 
-    
-    // Start is called before the first frame update
+    private void OnEnable()
+    {
+        Brick.OnBrickDestroyed += RemoveBrickFromList;
+    }
     void Start()
     {
+        brickList = new List<GameObject>();
         const float step = 0.6f;
         int perLine = Mathf.FloorToInt(4.0f / step);
         
@@ -34,31 +47,61 @@ public class MainManager : MonoBehaviour
                 var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
                 brick.PointValue = pointCountArray[i];
                 brick.onDestroyed.AddListener(AddPoint);
+                brickList.Add(brick.gameObject);
             }
         }
+
+        if (PlayerPrefs.HasKey("TutorialStatus"))
+        {
+            if (PlayerPrefs.GetInt("TutorialStatus") == 0)
+            {
+                TutorialWindow.SetActive(false);
+                isTutorialClosed = true;
+            }
+        }
+
+        HighScore.text = "Best Score : " + SaveSystem.Instance.username + " : " + SaveSystem.Instance.highScore;
     }
 
     private void Update()
     {
-        if (!m_Started)
+        if (isTutorialClosed)
         {
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (!m_Started)
             {
-                m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
-                Vector3 forceDir = new Vector3(randomDirection, 1, 0);
-                forceDir.Normalize();
+                if (Input.GetKeyDown(KeyCode.Space))
+                {
+                    m_Started = true;
+                    float randomDirection = Random.Range(-1.0f, 1.0f);
+                    Vector3 forceDir = new Vector3(randomDirection, 1, 0);
+                    forceDir.Normalize();
 
-                Ball.transform.SetParent(null);
-                Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
+                    Ball.transform.SetParent(null);
+                    Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
+                }
+            }
+            else if (m_GameOver)
+            {
+                if (Input.GetKeyDown(KeyCode.Space))
+                {
+                    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                }
             }
         }
-        else if (m_GameOver)
+    }
+
+    void RemoveBrickFromList(GameObject v_destroyedObject)
+    {
+        if (brickList.Contains(v_destroyedObject))
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
+            brickList.Remove(v_destroyedObject);
+            Debug.Log("Removed " + v_destroyedObject.name);
+        }
+
+        if (brickList.Count <= 0)
+        {
+            m_GameCleared = true;
+            GameOver();
         }
     }
 
@@ -68,9 +111,51 @@ public class MainManager : MonoBehaviour
         ScoreText.text = $"Score : {m_Points}";
     }
 
+    void ToggleTutorialDisplay()
+    {
+        if (tutorialToggle.isOn)
+            shouldShowTutorial = 0;
+        else
+            shouldShowTutorial = 1;
+        PlayerPrefs.SetInt("TutorialStatus", shouldShowTutorial);
+    }
+
+    public void CloseTutorial()
+    {
+        ToggleTutorialDisplay();
+        TutorialWindow.SetActive(false);
+        isTutorialClosed = true;
+    }
+
     public void GameOver()
     {
+        if (m_GameCleared)
+        {
+            if (Ball.gameObject != null)
+                Destroy(Ball.gameObject);
+            GameOverStateText.text = "VICTORY!!!" +"\n" + "Press Space to Restart";
+        }
         m_GameOver = true;
-        GameOverText.SetActive(true);
+        GameOverWindow.SetActive(true);
+        if (SaveSystem.Instance != null)
+        {
+            if (m_Points > SaveSystem.Instance.highScore)
+            {
+                SaveSystem.Instance.highScore = m_Points;
+                SaveSystem.Instance.SaveGameData();
+                CongratsText.text = $"NEW HIGH SCORE! \n {m_Points}";
+                CongratsText.gameObject.SetActive(true);
+            }
+        }
+    }
+
+    public void BackToMainMenu()
+    {
+        SceneManager.LoadScene(0);
+    }
+
+    private void OnDisable()
+    {
+        Brick.OnBrickDestroyed -= RemoveBrickFromList;
     }
 }

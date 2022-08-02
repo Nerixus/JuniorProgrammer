@@ -12,8 +12,7 @@ public class ColorPicker : MonoBehaviour
     public System.Action<Color> onColorChanged;
 
     List<Button> m_ColorButtons = new List<Button>();
-    
-    // Start is called before the first frame update
+
     public void Init()
     {
         foreach (var color in AvailableColors)
